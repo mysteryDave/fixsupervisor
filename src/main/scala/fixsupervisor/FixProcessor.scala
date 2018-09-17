@@ -19,12 +19,12 @@ object FixProcessor {
       * "Serde" refers to SERialiser/DEserializer
       */
     val builder = new StreamsBuilder
-    val sourceStream: KStream[String, String] = builder.stream("FixMessages")
+    val sourceStream: KStream[String, String] = builder.stream("FixEventsIn")
     val transformedStream: KStream[TradeEventKey, TradeEventValues] = sourceStream.map((_, value) => FixUtil.parse(value): KeyValue[TradeEventKey, TradeEventValues])
 
     val keySerde: Serde[TradeEventKey] = (new serdeFactory[TradeEventKey](true)).getSerde
     val valueSerde: Serde[TradeEventValues] = (new serdeFactory[TradeEventValues]()).getSerde
-    transformedStream.to("FixProcessed", Produced.`with`(keySerde,valueSerde))
+    transformedStream.to("TradeEvents", Produced.`with`(keySerde,valueSerde))
 
     /**
       * Run stream flow until term called to shut down
@@ -37,7 +37,7 @@ object FixProcessor {
 
   def config: Properties = {
     val properties = new Properties()
-    properties.put(StreamsConfig.APPLICATION_ID_CONFIG, "aggregator")
+    properties.put(StreamsConfig.APPLICATION_ID_CONFIG, "TradeSupervisor")
     properties.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092")
     properties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass)
     properties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass)
@@ -46,9 +46,7 @@ object FixProcessor {
   }
 
   class streamShutdown(streams: KafkaStreams) extends Thread {
-    override def run() {
-      streams.close()
-    }
+    override def run(): Unit = streams.close()
   }
 
 }

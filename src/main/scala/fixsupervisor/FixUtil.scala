@@ -4,7 +4,7 @@ import fixsupervisor.model.{TradeEventKey, TradeEventValues}
 import org.apache.kafka.streams.KeyValue
 
 /**
-  * Handles translating the serialised FIX string into a meaning ful set of dimensions(key) and facts(data) for supervision.
+  * Handles translating the serialised FIX string into a meaningful set of dimensions(key) and facts(data) for supervision.
   * TO DO: Replace with lookups or generated code that can reference QuickFIX XML dictionary and or configuration files.
   */
 object FixUtil {
@@ -41,10 +41,10 @@ object FixUtil {
       tag match {
         case 1 => keyBldr.account = value
         case 6 => valBldr.cumulativeValue = value.toDouble
-        case 14 => valBldr.cumulativeQty = value.toLong
-        case 31 => valBldr.lastQty = value.toLong
+        case 14 => valBldr.cumulativeQty = toLong(value)
+        case 31 => valBldr.lastQty = toLong(value)
         case 32 => valBldr.lastValue = value.toDouble
-        case 38 => valBldr.orderQty = value.toLong
+        case 38 => valBldr.orderQty = toLong(value)
         case 39 => keyBldr.state = value
         case 44 => valBldr.orderValue = value.toDouble
         case 47 => keyBldr.capacity = value match {
@@ -68,10 +68,18 @@ object FixUtil {
           case "6" => "GTD"
           case _ => "DAY"
         }
-        case 151 => valBldr.leavesQty = value.toLong
+        case 151 => valBldr.leavesQty = toLong(value)
+        case _ => //do nothing
       }
     })
 
     new KeyValue(keyBldr.build, valBldr.build)
+  }
+
+  //Ignore decimal points for quantity fields
+  def toLong(value: String): Long = {
+    val transStr: String = if (value.contains('.')) value.substring(0,value.indexOf('.'))
+    else value
+    transStr.toLong
   }
 }

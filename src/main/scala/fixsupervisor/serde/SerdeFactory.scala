@@ -10,14 +10,14 @@ class serdeFactory[T](isKey: Boolean = false) {
 
   private def getSerializer: Serializer[T] = {
     val theSerializer: Serializer[T] = new JsonPOJOSerializer[T]
-    serdeProps.put(classProperty, classOf[JsonPOJOSerializer[T]]())
+    serdeProps.put(classProperty, classOf[JsonPOJOSerializer[T]])
     theSerializer.configure(serdeProps, isKey)
     theSerializer
   }
 
   private def getDeserializer: Deserializer[T] = {
     val theDeserializer: Deserializer[T] = new JsonPOJODeserializer[T]
-    serdeProps.put(classProperty, classOf[JsonPOJODeserializer[T]]())
+    serdeProps.put(classProperty, classOf[JsonPOJODeserializer[T]])
     theDeserializer.configure(serdeProps, true)
     theDeserializer
   }
