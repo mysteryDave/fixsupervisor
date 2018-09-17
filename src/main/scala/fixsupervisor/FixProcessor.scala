@@ -9,7 +9,7 @@ import org.apache.kafka.streams.processor.{Processor, ProcessorContext, Processo
 import org.apache.kafka.common.serialization.{Serde, StringSerializer}
 import org.apache.kafka.streams.KeyValue
 
-object StreamApplication {
+object FixProcessor {
 
   def main(args: Array[String]): Unit = {
 
@@ -20,22 +20,24 @@ object StreamApplication {
       properties.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092")
       properties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass)
       properties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass)
+      properties.put(StreamsConfig.STATE_DIR_CONFIG, "E:/OLDEN/Den_old/Documents/David/Uni/Birkbeck/PROJECT/kafka/streams")
 
       properties
     }
 
     val builder = new StreamsBuilder
 
-    val sourceStream = builder.stream("FIX")
+    val sourceStream = builder.stream("FixMessages")
     sourceStream.to("FIXdup")
 
     val streams: KafkaStreams = new KafkaStreams(builder.build, config)
+    val shutDownHook = new streamShutdown(streams)
     streams.start()
-
+    Runtime.getRuntime.addShutdownHook(shutDownHook)
   }
 
 }
 
-class FixProcessor {
-
+class streamShutdown(streams: KafkaStreams) extends Thread {
+  override def run() { streams.close() }
 }
