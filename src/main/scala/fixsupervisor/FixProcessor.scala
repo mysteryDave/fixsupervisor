@@ -17,7 +17,7 @@ object FixProcessor {
   val logger: Logger = LoggerFactory.getLogger(this.getClass)
 //TODO replace hardcoded example trading limits with CSV file or better a limit stream
   val tradingLimits: List[Tuple3[String, TradeEventKey, TradeEventValues]] = List(
-    ("No more than £10m of open orders in Sterling.", new TradeEventKey(currency="GBP", state="OPEN"), new TradeEventValues(count = 0, leavesQty = 10000000)),
+    ("No more than £10m of open orders in Sterling.", new TradeEventKey(currency="GBP", state="OPEN"), new TradeEventValues(count = 0, leavesQty = 1000)),
     ("No more than 10 orders in EUR, no more than 50M EUR executed.", new TradeEventKey(currency="EUR"), new TradeEventValues(count = 10, cumulativeValue = 50000000))
   )
 
@@ -39,16 +39,16 @@ object FixProcessor {
     snapshot.toStream.to("TradeTotals", Produced.`with`(keySerde,valueSerde))
 
     val soundAlarm: ProcessorSupplier[(String, TradeEventKey, TradeEventValues), TradeEventValues] = new RaiseAlert
-    for (limit <- tradingLimits) snapshot.toStream
-        .filter((key: TradeEventKey, _) => key.matches(limit._2: TradeEventKey)) //filter to match alert
-        .map((_, value: TradeEventValues) => new KeyValue[TradeEventKey, TradeEventValues](limit._2, value: TradeEventValues)) //remove key
-        .groupByKey()
-        .aggregate(initializer, aggregator) //sum all components that match
-        .filter((_, value: TradeEventValues) => value.exceeds(limit._3: TradeEventValues)) //filter to those breaching limit
-        .toStream
-        .map((_, value) => new KeyValue(limit: (String, TradeEventKey, TradeEventValues), value: TradeEventValues))//preserve limit detail
-        .process(soundAlarm) //alert users to limit breach
-        //.foreach((key,value) => soundAlarm.process(key, value)) //alert users to limit breach
+//    for (limit <- tradingLimits) snapshot.toStream
+//        .filter((key: TradeEventKey, _) => key.matches(limit._2: TradeEventKey)) //filter to match alert
+//        .map((_, value: TradeEventValues) => new KeyValue[TradeEventKey, TradeEventValues](limit._2, value: TradeEventValues)) //remove key
+//        .groupByKey()
+//        .aggregate(initializer, aggregator) //sum all components that match
+//        .filter((_, value: TradeEventValues) => value.exceeds(limit._3: TradeEventValues)) //filter to those breaching limit
+//        .toStream
+//        .map((_, value) => new KeyValue(limit: (String, TradeEventKey, TradeEventValues), value: TradeEventValues))//preserve limit detail
+//        .process(soundAlarm) //alert users to limit breach
+//        //.foreach((key,value) => soundAlarm.process(key, value)) //alert users to limit breach
 
     //Run stream flow until term called to shut down
     val streamTopology = builder.build()
