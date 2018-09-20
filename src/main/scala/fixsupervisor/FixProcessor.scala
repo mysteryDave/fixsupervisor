@@ -10,45 +10,39 @@ import org.apache.kafka.streams._
 import org.apache.kafka.streams.kstream._
 import org.apache.kafka.common.serialization.Serde
 import org.apache.kafka.streams.KeyValue
+import org.apache.kafka.streams.processor.ProcessorSupplier
 import org.slf4j.{Logger, LoggerFactory}
 
 object FixProcessor {
   val logger: Logger = LoggerFactory.getLogger(this.getClass)
-
+//TODO replace hardcoded example trading limits with CSV file or better a limit stream
   val tradingLimits: List[Tuple3[String, TradeEventKey, TradeEventValues]] = List(
     ("No more than £10m of open orders in Sterling.", new TradeEventKey(currency="GBP", state="OPEN"), new TradeEventValues(count = 0, leavesQty = 10000000)),
     ("No more than 10 orders in EUR, no more than 50M EUR executed.", new TradeEventKey(currency="EUR"), new TradeEventValues(count = 10, cumulativeValue = 50000000))
   )
 
   def main(args: Array[String]): Unit = {
-    /**
-      * Setup stream flow.
-      * "Serde" refers to SERialiser/DEserializer
-      */
-
-    val keySerde: Serde[TradeEventKey] = Serdes.serdeFrom(new FixKeySerializer, new FixKeyDeserializer)
-    val valueSerde: Serde[TradeEventValues] = Serdes.serdeFrom(new FixValueSerializer, new FixValueDeserializer)
-
-    val initializer: Initializer[TradeEventValues] = () => new TradeEventValues(count = 0)
-    val aggregator: Aggregator[TradeEventKey, TradeEventValues, TradeEventValues] = (key: TradeEventKey, value: TradeEventValues, aggregate: TradeEventValues) => aggregate + value
-
+    // Source stream of FIX Bytes from FIX engine. Transform to meaningful keys and values.
     val builder = new StreamsBuilder
     val sourceStream: KStream[String, String] = builder.stream("FixEventsIn")
     val transformedStream: KStream[TradeEventKey, TradeEventValues] = sourceStream.map((_, value) => FixUtil.parse(value): KeyValue[TradeEventKey, TradeEventValues])
-
+    val initializer: Initializer[TradeEventValues] = () => new TradeEventValues(count = 0)
+    val aggregator: Aggregator[TradeEventKey, TradeEventValues, TradeEventValues] = (key: TradeEventKey, value: TradeEventValues, aggregate: TradeEventValues) => aggregate + value
     val snapshot: KTable[TradeEventKey, TradeEventValues] = transformedStream.groupBy((key,_) => key)
       .aggregate(initializer, aggregator
-      ,Materialized.as("TradingSnapshot"))
-
+        ,Materialized.as("TradingSnapshot"))
+    //Push the transformed and aggregated flows downstream for other applications to connect to.
+    //"Serde" refers to SERialiser/DEserializer
+    val keySerde: Serde[TradeEventKey] = Serdes.serdeFrom(new FixKeySerializer, new FixKeyDeserializer)
+    val valueSerde: Serde[TradeEventValues] = Serdes.serdeFrom(new FixValueSerializer, new FixValueDeserializer)
     transformedStream.to("TradeEvents", Produced.`with`(keySerde,valueSerde))
     snapshot.toStream.to("TradeTotals", Produced.`with`(keySerde,valueSerde))
 
+    val soundAlarm: ProcessorSupplier[(String, TradeEventKey, TradeEventValues), TradeEventValues]
     for (limit <- tradingLimits) {
       snapshot.toStream(); //filter to match alerts
 
-    /**
-      * Run stream flow until term called to shut down
-      */
+    //Run stream flow until term called to shut down
     val streamTopology = builder.build()
     logger.info(streamTopology.describe().toString)
     val streams: KafkaStreams = new KafkaStreams(streamTopology, config)
