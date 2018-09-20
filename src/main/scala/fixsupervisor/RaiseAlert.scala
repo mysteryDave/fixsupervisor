@@ -4,7 +4,7 @@ import fixsupervisor.model.{TradeEventKey, TradeEventValues}
 import org.apache.kafka.streams.processor.{Processor, ProcessorContext, ProcessorSupplier}
 import org.slf4j.{Logger, LoggerFactory}
 
-class LimitChecker extends Processor[(String, TradeEventKey, TradeEventValues), TradeEventValues]
+class RaiseAlert extends Processor[(String, TradeEventKey, TradeEventValues), TradeEventValues]
   with ProcessorSupplier[(String, TradeEventKey, TradeEventValues), TradeEventValues] {
 
   val logger: Logger = LoggerFactory.getLogger(this.getClass)

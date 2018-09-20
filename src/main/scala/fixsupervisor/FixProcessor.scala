@@ -10,7 +10,7 @@ import org.apache.kafka.streams._
 import org.apache.kafka.streams.kstream._
 import org.apache.kafka.common.serialization.Serde
 import org.apache.kafka.streams.KeyValue
-import org.apache.kafka.streams.processor.ProcessorSupplier
+import org.apache.kafka.streams.processor.{Processor, ProcessorSupplier}
 import org.slf4j.{Logger, LoggerFactory}
 
 object FixProcessor {
@@ -38,13 +38,16 @@ object FixProcessor {
     transformedStream.to("TradeEvents", Produced.`with`(keySerde,valueSerde))
     snapshot.toStream.to("TradeTotals", Produced.`with`(keySerde,valueSerde))
 
-    val soundAlarm: ProcessorSupplier[(String, TradeEventKey, TradeEventValues), TradeEventValues]
-    for (limit <- tradingLimits) {
-      snapshot.toStream
+    val soundAlarm: Processor[(String, TradeEventKey, TradeEventValues), TradeEventValues] = new RaiseAlert
+    for (limit <- tradingLimits) snapshot.toStream
         .filter((key, _) => key.matches(limit._2)) //filter to match alert
         .map((_, value) => new KeyValue[Boolean, TradeEventValues](true, value))
-        .groupByKey().aggregate(initializer, aggregator) //sum all components that match
+        .groupByKey()
+        .aggregate(initializer, aggregator) //sum all components that match
         .filter((_, value) => value.exceeds(limit._3)) //filter to those breaching limit
+        .toStream
+        .map((_, value) => new KeyValue[Tuple3(String, TradeEventKey, TradeEventValues), TradeEventValues](limit, value))
+        .process(soundAlarm)
 
     //Run stream flow until term called to shut down
     val streamTopology = builder.build()
