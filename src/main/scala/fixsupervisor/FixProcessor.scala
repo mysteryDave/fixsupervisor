@@ -3,7 +3,7 @@ package fixsupervisor
 import java.util.Properties
 
 import fixsupervisor.model.{TradeEventKey, TradeEventValues}
-import fixsupervisor.serde.serdeFactory
+import fixsupervisor.serde._
 import org.apache.kafka.common.serialization._
 import org.apache.kafka.streams._
 import org.apache.kafka.streams.kstream._
@@ -22,14 +22,18 @@ object FixProcessor {
     val sourceStream: KStream[String, String] = builder.stream("FixEventsIn")
     val transformedStream: KStream[TradeEventKey, TradeEventValues] = sourceStream.map((_, value) => FixUtil.parse(value): KeyValue[TradeEventKey, TradeEventValues])
 
-    val keySerde: Serde[TradeEventKey] = (new serdeFactory[TradeEventKey](true)).getSerde
-    val valueSerde: Serde[TradeEventValues] = (new serdeFactory[TradeEventValues]()).getSerde
+    val keySerde: Serde[TradeEventKey] = Serdes.serdeFrom(new FixKeySerializer, new FixKeyDeserializer)
+    val valueSerde: Serde[TradeEventValues] = Serdes.serdeFrom(new FixValueSerializer, new FixValueDeserializer)
+    val grouped: KGroupedStream[TradeEventKey, TradeEventValues] = transformedStream.groupBy((key, value) => key),keySerde, valueSerde)
+    val snapshot: KTable[TradeEventKey, java.lang.Long] = grouped.count()
     transformedStream.to("TradeEvents", Produced.`with`(keySerde,valueSerde))
 
     /**
       * Run stream flow until term called to shut down
       */
-    val streams: KafkaStreams = new KafkaStreams(builder.build, config)
+    val streamTopology = builder.build()
+    println(streamTopology.describe())
+    val streams: KafkaStreams = new KafkaStreams(streamTopology, config)
     val shutDownHook = new streamShutdown(streams)
     streams.start()
     Runtime.getRuntime.addShutdownHook(shutDownHook)
