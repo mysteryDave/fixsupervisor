@@ -27,7 +27,7 @@ object FixProcessor {
     val sourceStream: KStream[String, String] = builder.stream("FixEventsIn")
     val transformedStream: KStream[TradeEventKey, TradeEventValues] = sourceStream.map((_, value) => FixUtil.parse(value): KeyValue[TradeEventKey, TradeEventValues])
     val initializer: Initializer[TradeEventValues] = () => new TradeEventValues(count = 0)
-    val aggregator: Aggregator[TradeEventKey, TradeEventValues, TradeEventValues] = (key: TradeEventKey, value: TradeEventValues, aggregate: TradeEventValues) => aggregate + value
+    val aggregator: Aggregator[Any, TradeEventValues, TradeEventValues] = (key: Any, value: TradeEventValues, aggregate: TradeEventValues) => aggregate + value
     val snapshot: KTable[TradeEventKey, TradeEventValues] = transformedStream.groupBy((key,_) => key)
       .aggregate(initializer, aggregator
         ,Materialized.as("TradingSnapshot"))
@@ -40,7 +40,11 @@ object FixProcessor {
 
     val soundAlarm: ProcessorSupplier[(String, TradeEventKey, TradeEventValues), TradeEventValues]
     for (limit <- tradingLimits) {
-      snapshot.toStream(); //filter to match alerts
+      snapshot.toStream
+        .filter((key, _) => key.matches(limit._2)) //filter to match alert
+        .map((_, value) => new KeyValue[Boolean, TradeEventValues](true, value))
+        .groupByKey().aggregate(initializer, aggregator) //sum all components that match
+        .filter((_, value) => value.exceeds(limit._3)) //filter to those breaching limit
 
     //Run stream flow until term called to shut down
     val streamTopology = builder.build()

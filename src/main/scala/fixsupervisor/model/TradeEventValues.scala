@@ -15,4 +15,14 @@ class TradeEventValues( val count: Long = 1, //message count
     this.lastQty + that.lastQty, this.lastValue + that.lastValue,
     this.orderQty + that.orderQty, this.orderValue + that.orderValue,
     this.leavesQty + that.leavesQty, this.leavesValue + that.leavesValue)
+  def exceeds(limit: TradeEventValues) : Boolean =
+    (limit.count>0 && this.count > limit.count) ||
+      (limit.cumulativeQty >0 && this.cumulativeQty > limit.cumulativeQty) ||
+      (limit.cumulativeValue >0 && this.cumulativeValue > limit.cumulativeValue) ||
+      (limit.lastQty >0 && this.lastQty > limit.lastQty) ||
+      (limit.lastValue >0 && this.lastValue > limit.lastValue) ||
+      (limit.orderQty >0 && this.orderQty > limit.orderQty) ||
+      (limit.orderValue >0 && this.orderValue > limit.orderValue) ||
+      (limit.leavesQty >0 && this.leavesQty > limit.leavesQty) ||
+      (limit.leavesValue >0 && this.leavesValue > limit.leavesValue)
 }
