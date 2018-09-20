@@ -38,7 +38,7 @@ object FixProcessor {
     transformedStream.to("TradeEvents", Produced.`with`(keySerde,valueSerde))
     snapshot.toStream.to("TradeTotals", Produced.`with`(keySerde,valueSerde))
 
-    val soundAlarm: Processor[(String, TradeEventKey, TradeEventValues), TradeEventValues] = new RaiseAlert
+    val soundAlarm: ProcessorSupplier[(String, TradeEventKey, TradeEventValues), TradeEventValues] = new RaiseAlert
     for (limit <- tradingLimits) snapshot.toStream
         .filter((key: TradeEventKey, _) => key.matches(limit._2: TradeEventKey)) //filter to match alert
         .map((_, value: TradeEventValues) => new KeyValue[TradeEventKey, TradeEventValues](limit._2, value: TradeEventValues)) //remove key
@@ -47,7 +47,8 @@ object FixProcessor {
         .filter((_, value: TradeEventValues) => value.exceeds(limit._3: TradeEventValues)) //filter to those breaching limit
         .toStream
         .map((_, value) => new KeyValue(limit: (String, TradeEventKey, TradeEventValues), value: TradeEventValues))//preserve limit detail
-        .foreach((key,value) => soundAlarm.process(key, value)) //alert users to limit breach
+        .process(soundAlarm) //alert users to limit breach
+        //.foreach((key,value) => soundAlarm.process(key, value)) //alert users to limit breach
 
     //Run stream flow until term called to shut down
     val streamTopology = builder.build()
