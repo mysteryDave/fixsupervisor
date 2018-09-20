@@ -1,6 +1,7 @@
 package fixsupervisor
 
 import java.util.Properties
+import java.util.concurrent.TimeUnit
 
 import fixsupervisor.model.{TradeEventKey, TradeEventValues}
 import fixsupervisor.serde._
@@ -9,30 +10,38 @@ import org.apache.kafka.streams._
 import org.apache.kafka.streams.kstream._
 import org.apache.kafka.common.serialization.Serde
 import org.apache.kafka.streams.KeyValue
+import org.slf4j.{Logger, LoggerFactory}
 
 object FixProcessor {
 
   def main(args: Array[String]): Unit = {
-
+    val logger: Logger = LoggerFactory.getLogger(this.getClass)
     /**
       * Setup stream flow.
       * "Serde" refers to SERialiser/DEserializer
       */
+
+    val keySerde: Serde[TradeEventKey] = Serdes.serdeFrom(new FixKeySerializer, new FixKeyDeserializer)
+    val valueSerde: Serde[TradeEventValues] = Serdes.serdeFrom(new FixValueSerializer, new FixValueDeserializer)
+
+    val initializer: Initializer[TradeEventValues] = () => new TradeEventValues(count = 0)
+    val aggregator: Aggregator[TradeEventKey, TradeEventValues, TradeEventValues] = (key: TradeEventKey, value: TradeEventValues, aggregate: TradeEventValues) => aggregate + value
+
     val builder = new StreamsBuilder
     val sourceStream: KStream[String, String] = builder.stream("FixEventsIn")
     val transformedStream: KStream[TradeEventKey, TradeEventValues] = sourceStream.map((_, value) => FixUtil.parse(value): KeyValue[TradeEventKey, TradeEventValues])
 
-    val keySerde: Serde[TradeEventKey] = Serdes.serdeFrom(new FixKeySerializer, new FixKeyDeserializer)
-    val valueSerde: Serde[TradeEventValues] = Serdes.serdeFrom(new FixValueSerializer, new FixValueDeserializer)
-    val grouped: KGroupedStream[TradeEventKey, TradeEventValues] = transformedStream.groupBy((key, value) => key),keySerde, valueSerde)
-    val snapshot: KTable[TradeEventKey, java.lang.Long] = grouped.count()
+    val snapshot: KTable[TradeEventKey, TradeEventValues] = transformedStream.groupBy((key,_) => key)
+      .aggregate(initializer, aggregator
+      ,Materialized.as("TradingSnapshot"))
+
     transformedStream.to("TradeEvents", Produced.`with`(keySerde,valueSerde))
 
     /**
       * Run stream flow until term called to shut down
       */
     val streamTopology = builder.build()
-    println(streamTopology.describe())
+    logger.info(streamTopology.describe().toString)
     val streams: KafkaStreams = new KafkaStreams(streamTopology, config)
     val shutDownHook = new streamShutdown(streams)
     streams.start()
@@ -50,7 +59,7 @@ object FixProcessor {
   }
 
   class streamShutdown(streams: KafkaStreams) extends Thread {
-    override def run(): Unit = streams.close()
+    override def run(): Unit = streams.close(10, TimeUnit.SECONDS)
   }
 
 }

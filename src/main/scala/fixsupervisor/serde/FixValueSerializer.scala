@@ -4,14 +4,16 @@ import java.util
 
 import fixsupervisor.model.TradeEventValues
 import org.apache.kafka.common.serialization.Serializer
+import org.slf4j.{Logger, LoggerFactory}
 
 class FixValueSerializer extends Serializer[TradeEventValues] {
+  val logger: Logger = LoggerFactory.getLogger(this.getClass)
   val SOH: Char = 1.toChar
 
   override def configure(configs: util.Map[String, _], isKey: Boolean): Unit = {}
 
   override def serialize(topic: String, data: TradeEventValues): Array[Byte] = {
-    println(s"SERDE serialising value $data")
+    logger.debug(s"SERDE serialising value $data")
     var fixString: String = ""
     if(data.cumulativeValue != null && data.cumulativeValue >= 0) fixString=s"$fixString${SOH}6=${data.cumulativeValue}"
     if(data.cumulativeQty != null && data.cumulativeQty >= 0) fixString=s"$fixString${SOH}14=${data.cumulativeQty}"
@@ -22,7 +24,7 @@ class FixValueSerializer extends Serializer[TradeEventValues] {
     if(data.leavesQty != null && data.leavesQty >= 0) fixString=s"$fixString${SOH}151=${data.leavesQty}"
     if(data.leavesValue != null && data.leavesValue >= 0) fixString=s"$fixString${SOH}154=${data.leavesValue}" //Not a real FIX tag
     val finalFix = fixString.toString()
-    println(s"SERDE serialised value $finalFix")
+    logger.debug(s"SERDE serialised value $finalFix")
     if (finalFix.length > 1) finalFix.substring(0, finalFix.length - 1).getBytes("UTF-8") //Assumes it was not an empty object!
     else "EMPTY".getBytes("UTF-8")
   }

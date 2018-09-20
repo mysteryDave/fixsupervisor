@@ -2,14 +2,17 @@ package fixsupervisor
 
 import fixsupervisor.model._
 import org.apache.kafka.streams.KeyValue
+import org.slf4j.{Logger, LoggerFactory}
 
 /**
   * Handles translating the serialised FIX string into a meaningful set of dimensions(key) and facts(data) for supervision.
   * TO DO: Replace with lookups or generated code that can reference QuickFIX XML dictionary and or configuration files.
   */
 object FixUtil {
+  val logger: Logger = LoggerFactory.getLogger(this.getClass)
+
   def parse(fixmsg: String): KeyValue[TradeEventKey, TradeEventValues] = {
-    println(s"parsing $fixmsg")
+    logger.debug(s"parsing $fixmsg")
     val keyBldr = new TradeEventKeyBuilder()
     val valBldr = new TradeEventValuesBuilder()
 
@@ -60,8 +63,8 @@ object FixUtil {
       }
     })
 
-    println(s"KEY:$keyBldr")
-    println(s"VALUE:$valBldr")
+    logger.trace(s"KEY:$keyBldr")
+    logger.trace(s"VALUE:$valBldr")
     new KeyValue(keyBldr.build, valBldr.build)
   }
 
