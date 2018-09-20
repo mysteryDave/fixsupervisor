@@ -13,9 +13,14 @@ import org.apache.kafka.streams.KeyValue
 import org.slf4j.{Logger, LoggerFactory}
 
 object FixProcessor {
+  val logger: Logger = LoggerFactory.getLogger(this.getClass)
+
+  val tradingLimits: List[Tuple3[String, TradeEventKey, TradeEventValues]] = List(
+    ("No more than £10m of open orders in Sterling.", new TradeEventKey(currency="GBP", state="OPEN"), new TradeEventValues(count = 0, leavesQty = 10000000)),
+    ("No more than 10 orders in EUR, no more than 50M EUR executed.", new TradeEventKey(currency="EUR"), new TradeEventValues(count = 10, cumulativeValue = 50000000))
+  )
 
   def main(args: Array[String]): Unit = {
-    val logger: Logger = LoggerFactory.getLogger(this.getClass)
     /**
       * Setup stream flow.
       * "Serde" refers to SERialiser/DEserializer
@@ -36,6 +41,10 @@ object FixProcessor {
       ,Materialized.as("TradingSnapshot"))
 
     transformedStream.to("TradeEvents", Produced.`with`(keySerde,valueSerde))
+    snapshot.toStream.to("TradeTotals", Produced.`with`(keySerde,valueSerde))
+
+    for (limit <- tradingLimits) {
+      snapshot.toStream(); //filter to match alerts
 
     /**
       * Run stream flow until term called to shut down
