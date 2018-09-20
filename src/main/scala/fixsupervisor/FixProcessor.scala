@@ -41,13 +41,13 @@ object FixProcessor {
     val soundAlarm: Processor[(String, TradeEventKey, TradeEventValues), TradeEventValues] = new RaiseAlert
     for (limit <- tradingLimits) snapshot.toStream
         .filter((key, _) => key.matches(limit._2)) //filter to match alert
-        .map((_, value) => new KeyValue[Boolean, TradeEventValues](true, value))
+        .map((_, value) => new KeyValue[Boolean, TradeEventValues](true, value)) //remove key
         .groupByKey()
         .aggregate(initializer, aggregator) //sum all components that match
         .filter((_, value) => value.exceeds(limit._3)) //filter to those breaching limit
         .toStream
-        .map((_, value) => new KeyValue[Tuple3(String, TradeEventKey, TradeEventValues), TradeEventValues](limit, value))
-        .process(soundAlarm)
+        .map((_, value) => new KeyValue(limit, value)) //replace
+        .process((key, value) => soundAlarm.process(key, value))
 
     //Run stream flow until term called to shut down
     val streamTopology = builder.build()
