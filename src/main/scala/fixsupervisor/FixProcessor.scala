@@ -10,7 +10,7 @@ import org.apache.kafka.streams._
 import org.apache.kafka.streams.kstream._
 import org.apache.kafka.common.serialization.Serde
 import org.apache.kafka.streams.KeyValue
-import org.apache.kafka.streams.processor.{Processor, ProcessorSupplier}
+import org.apache.kafka.streams.processor.ProcessorSupplier
 import org.slf4j.{Logger, LoggerFactory}
 
 object FixProcessor {
@@ -39,17 +39,17 @@ object FixProcessor {
     snapshot.toStream.to("TradeTotals", Produced.`with`(keySerde,valueSerde))
 
     val soundAlarm: ProcessorSupplier[(String, TradeEventKey, TradeEventValues), TradeEventValues] = new RaiseAlert
-//    for (limit <- tradingLimits) snapshot.toStream
-//        .filter((key: TradeEventKey, _) => key.matches(limit._2: TradeEventKey)) //filter to match alert
-//        .map((_, value: TradeEventValues) => new KeyValue[TradeEventKey, TradeEventValues](limit._2, value: TradeEventValues)) //remove key
-//        .groupByKey()
-//        .aggregate(initializer, aggregator) //sum all components that match
-//        .filter((_, value: TradeEventValues) => value.exceeds(limit._3: TradeEventValues)) //filter to those breaching limit
-//        .toStream
-//        .map((_, value) => new KeyValue(limit: (String, TradeEventKey, TradeEventValues), value: TradeEventValues))//preserve limit detail
-//        .process(soundAlarm) //alert users to limit breach
-//        //.foreach((key,value) => soundAlarm.process(key, value)) //alert users to limit breach
-
+    for (limit <- tradingLimits) {
+      val matchingOrders: KStream[Boolean, TradeEventValues] = snapshot.toStream
+        .filter((key: TradeEventKey, _) => key.matches(limit._2: TradeEventKey)) //filter to match alert
+        .map((_, value: TradeEventValues) => new KeyValue(true, value))
+      val matchingAggregate: KTable[Boolean, TradeEventValues] = matchingOrders.groupByKey()
+        .aggregate(initializer, aggregator) //sum all components that match
+        .filter((_, value: TradeEventValues) => value.exceeds(limit._3: TradeEventValues)) //filter to those breaching limit
+      val limitBreaches: KStream[(String, TradeEventKey, TradeEventValues), TradeEventValues] = matchingAggregate.toStream
+        .map((_, value) => new KeyValue[(String, TradeEventKey, TradeEventValues), TradeEventValues](limit, value))
+      limitBreaches.process(soundAlarm)
+    }
     //Run stream flow until term called to shut down
     val streamTopology = builder.build()
     logger.info(streamTopology.describe().toString)
@@ -65,7 +65,7 @@ object FixProcessor {
     properties.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092")
     properties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass)
     properties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass)
-    properties.put(StreamsConfig.STATE_DIR_CONFIG, "E:/OLDEN/Den_old/Documents/David/Uni/Birkbeck/PROJECT/kafka/streams")
+    properties.put(StreamsConfig.STATE_DIR_CONFIG, "C:/Users/DT/Documents/Msc/PROJECT/kafka")
     properties
   }
 
