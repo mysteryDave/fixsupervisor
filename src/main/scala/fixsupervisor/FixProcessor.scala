@@ -38,16 +38,16 @@ object FixProcessor {
     transformedStream.to("TradeEvents", Produced.`with`(keySerde,valueSerde))
     snapshot.toStream.to("TradeTotals", Produced.`with`(keySerde,valueSerde))
 
-    val soundAlarm: ProcessorSupplier[(String, TradeEventKey, TradeEventValues), TradeEventValues] = new RaiseAlert
+    val soundAlarm: ProcessorSupplier[TradeEventKey, TradeEventValues] = new RaiseAlert
     for (limit <- tradingLimits) {
-      val matchingOrders: KStream[Boolean, TradeEventValues] = snapshot.toStream
+      val matchingOrders: KStream[TradeEventKey, TradeEventValues] = snapshot.toStream
         .filter((key: TradeEventKey, _) => key.matches(limit._2: TradeEventKey)) //filter to match alert
-        .map((_, value: TradeEventValues) => new KeyValue(true, value))
-      val matchingAggregate: KTable[Boolean, TradeEventValues] = matchingOrders.groupByKey()
+        .map((_, value: TradeEventValues) => new KeyValue(limit._2, value))
+      val matchingAggregate: KTable[TradeEventKey, TradeEventValues] = matchingOrders.groupByKey()
         .aggregate(initializer, aggregator) //sum all components that match
         .filter((_, value: TradeEventValues) => value.exceeds(limit._3: TradeEventValues)) //filter to those breaching limit
-      val limitBreaches: KStream[(String, TradeEventKey, TradeEventValues), TradeEventValues] = matchingAggregate.toStream
-        .map((_, value) => new KeyValue[(String, TradeEventKey, TradeEventValues), TradeEventValues](limit, value))
+      val limitBreaches: KStream[TradeEventKey, TradeEventValues] = matchingAggregate.toStream
+        .map((_, value) => new KeyValue[TradeEventKey, TradeEventValues](limit._2, value))
       limitBreaches.process(soundAlarm)
     }
     //Run stream flow until term called to shut down
